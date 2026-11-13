@@ -1,79 +1,184 @@
-import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert } from 'react-native';
-import { Lock, Mail } from 'lucide-react-native';
-import { useAuth } from '../context/AuthContext';
+import React, { useState, useEffect, useContext } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
+import { useRouter } from 'expo-router';
+import {
+  Factory,
+  Mail,
+  Lock,
+  ArrowRight,
+  Sun,
+  Moon,
+} from 'lucide-react-native';
+import * as AuthModule from '../context/AuthContext';
 
-export default function Login() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  
-  const { devLogin } = useAuth(); // Puxa a função de login falso
+// --- SINCRONIZADOR GLOBAL DE TEMA (CLARO / ESCURO) ---
+const globalTheme = globalThis as unknown as {
+  __hmazIsDark?: boolean;
+  __hmazListeners?: Set<(val: boolean) => void>;
+};
+if (!globalTheme.__hmazListeners) {
+  globalTheme.__hmazListeners = new Set();
+}
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert('Atenção', 'Por favor, preencha todos os campos.');
-      return;
-    }
-    
-    setLoading(true);
-    
-    // Simula 1 segundo de carregamento e faz o login
-    setTimeout(() => {
-      devLogin();
-      setLoading(false);
-    }, 1000);
+function useGlobalTheme() {
+  const [isDark, setIsDark] = useState<boolean>(!!globalTheme.__hmazIsDark);
+
+  useEffect(() => {
+    const listener = (novoValor: boolean) => setIsDark(novoValor);
+    globalTheme.__hmazListeners!.add(listener);
+    setIsDark(!!globalTheme.__hmazIsDark);
+    return () => {
+      globalTheme.__hmazListeners!.delete(listener);
+    };
+  }, []);
+
+  const toggleTheme = () => {
+    const novoValor = !globalTheme.__hmazIsDark;
+    globalTheme.__hmazIsDark = novoValor;
+    globalTheme.__hmazListeners!.forEach((fn) => fn(novoValor));
   };
 
-  return (
-    <View className="flex-1 justify-center px-6 bg-zinc-50 dark:bg-[#0a0a0a]">
-      <View className="mb-10">
-        <Text className="text-4xl font-bold text-blue-600 mb-2">Grupo Hmaz</Text>
-        <Text className="text-base text-zinc-500 dark:text-zinc-400">
-          Faça login para aceder ao ERP mobile
-        </Text>
-      </View>
+  return { isDark, toggleTheme };
+}
+// -----------------------------------------------------
 
-      <View className="space-y-4">
-        {/* Input Email */}
-        <View className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg px-4 py-3 flex-row items-center mb-4">
-          <Mail size={20} color="#71717a" />
-          <TextInput 
-            className="flex-1 ml-3 text-zinc-900 dark:text-zinc-100"
-            placeholder="E-mail"
-            placeholderTextColor="#a1a1aa"
-            autoCapitalize="none"
-            keyboardType="email-address"
+export default function LoginScreen() {
+  const router = useRouter();
+  const { isDark, toggleTheme } = useGlobalTheme();
+
+  const authHook = (AuthModule as any).useAuth;
+  const authContextObj = (AuthModule as any).AuthContext || (AuthModule as any).default;
+  const auth = authHook ? authHook() : authContextObj ? useContext(authContextObj) : null;
+
+  // Campos iniciam vazios para exigir digitação (mesmo que mockada)
+  const [email, setEmail] = useState('');
+  const [senha, setSenha] = useState('');
+  const [erro, setErro] = useState('');
+
+  const handleLogin = () => {
+    if (!email.trim() || !senha.trim()) {
+      setErro('Por favor, informe um e-mail e uma palavra-passe para entrar.');
+      return;
+    }
+
+    setErro('');
+
+    // Ativa a sessão no AuthContext (caso exista)
+    if (auth) {
+      if (typeof auth.signIn === 'function') auth.signIn(email, senha);
+      else if (typeof auth.login === 'function') auth.login(email, senha);
+      else if (typeof auth.devLogin === 'function') auth.devLogin();
+      else if (typeof auth.setSigned === 'function') auth.setSigned(true);
+    }
+
+    // Redireciona para a pasta correta do projeto: /(expo)
+    router.replace('/(expo)');
+  };
+
+  const bgTela = isDark ? 'bg-slate-950' : 'bg-slate-100';
+  const bgCard = isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100';
+  const textoTitulo = isDark ? 'text-white' : 'text-slate-800';
+  const textoSub = isDark ? 'text-slate-400' : 'text-slate-500';
+  const bgInput = isDark
+    ? 'bg-slate-800 border-slate-700 text-white'
+    : 'bg-slate-50 border-slate-200 text-slate-800';
+
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      className={`flex-1 justify-center px-6 ${bgTela}`}
+    >
+      <View className={`rounded-3xl p-6 shadow-xl border ${bgCard}`}>
+        <View className="flex-row justify-between items-center mb-6">
+          <View className="flex-row items-center">
+            <View className="w-12 h-12 rounded-2xl bg-blue-600 items-center justify-center mr-3">
+              <Factory size={24} color="#FFFFFF" />
+            </View>
+            <View>
+              <Text className="text-blue-500 text-xs font-bold uppercase tracking-wider">
+                Grupo Hmaz
+              </Text>
+              <Text className={`text-2xl font-extrabold ${textoTitulo}`}>
+                ERP Mobile
+              </Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            onPress={toggleTheme}
+            className={`p-2.5 rounded-xl border ${
+              isDark
+                ? 'bg-amber-500/20 border-amber-500/40'
+                : 'bg-slate-100 border-slate-200'
+            }`}
+          >
+            {isDark ? (
+              <Sun size={20} color="#fbbf24" />
+            ) : (
+              <Moon size={20} color="#475569" />
+            )}
+          </TouchableOpacity>
+        </View>
+
+        <Text className={`text-sm mb-5 ${textoSub}`}>
+          Introduza as suas credenciais para aceder ao painel da fábrica.
+        </Text>
+
+        {erro ? (
+          <View className="bg-rose-500/15 border border-rose-500/30 rounded-xl p-3 mb-4">
+            <Text className="text-rose-500 text-xs font-bold">{erro}</Text>
+          </View>
+        ) : null}
+
+        <Text className={`text-xs font-bold uppercase mb-1.5 ${textoSub}`}>
+          E-mail Corporativo
+        </Text>
+        <View className={`flex-row items-center border rounded-xl px-3.5 py-3 mb-4 ${bgInput}`}>
+          <Mail size={18} color="#64748b" />
+          <TextInput
             value={email}
             onChangeText={setEmail}
+            placeholder="Ex: admin@hmaz.com.br"
+            placeholderTextColor="#64748b"
+            autoCapitalize="none"
+            keyboardType="email-address"
+            className={`flex-1 ml-2.5 text-sm ${textoTitulo}`}
           />
         </View>
 
-        {/* Input Palavra-passe */}
-        <View className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg px-4 py-3 flex-row items-center mb-8">
-          <Lock size={20} color="#71717a" />
-          <TextInput 
-            className="flex-1 ml-3 text-zinc-900 dark:text-zinc-100"
-            placeholder="Palavra-passe"
-            placeholderTextColor="#a1a1aa"
+        <Text className={`text-xs font-bold uppercase mb-1.5 ${textoSub}`}>
+          Palavra-passe
+        </Text>
+        <View className={`flex-row items-center border rounded-xl px-3.5 py-3 mb-6 ${bgInput}`}>
+          <Lock size={18} color="#64748b" />
+          <TextInput
+            value={senha}
+            onChangeText={setSenha}
+            placeholder="Digite a sua senha"
+            placeholderTextColor="#64748b"
             secureTextEntry
-            value={password}
-            onChangeText={setPassword}
+            className={`flex-1 ml-2.5 text-sm ${textoTitulo}`}
           />
         </View>
 
-        {/* Botão Entrar */}
-        <TouchableOpacity 
+        <TouchableOpacity
+          activeOpacity={0.85}
           onPress={handleLogin}
-          disabled={loading}
-          className="bg-blue-600 rounded-lg py-4 items-center justify-center opacity-100"
-          style={{ opacity: loading ? 0.7 : 1 }}
+          className="bg-blue-600 py-3.5 rounded-xl flex-row items-center justify-center shadow-md"
         >
-          <Text className="text-white font-semibold text-base">
-            {loading ? 'A entrar...' : 'Entrar no Sistema'}
+          <Text className="text-white font-bold text-base mr-2">
+            Entrar no Sistema
           </Text>
+          <ArrowRight size={18} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
